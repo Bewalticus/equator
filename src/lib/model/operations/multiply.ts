@@ -12,17 +12,17 @@ export default class Multiply extends BinaryOperation {
         super(leftNode, "*", rightNode);
     }
 
-    simplify(): Node {
-        var leftSimplified = this.leftNode.simplify();
-        var rightSimplified = this.rightNode.simplify();
+    simplify(): [boolean, Node] {
+        var [leftChanged, leftSimplified] = this.leftNode.simplify();
+        var [rightChanged, rightSimplified] = this.rightNode.simplify();
         if (leftSimplified instanceof Constant && rightSimplified instanceof Constant) {
-            return new Constant(leftSimplified.value * rightSimplified.value);
+            return [true, new Constant(leftSimplified.value * rightSimplified.value)];
         }
         // try to simplify addition across sub-terms
         var simplified = this.simplifyAcrossSubTerms(leftSimplified, rightSimplified);
-        if (simplified) return simplified;
+        if (simplified) return [true, simplified];
         // no simplify solution found, just return simplified sub-terms
-        return new Multiply(leftSimplified, rightSimplified);
+        return [leftChanged || rightChanged, new Multiply(leftSimplified, rightSimplified)];
     }
 
     simplifyAcrossSubTerms(term1: Node, term2: Node): PossibleNode {
@@ -56,5 +56,9 @@ export default class Multiply extends BinaryOperation {
         if (term.leftNode instanceof Constant) return [term.leftNode, term.rightNode];
         if (term.rightNode instanceof Constant) return [term.rightNode, term.leftNode];
         return [undefined, term];
+    }
+
+    clone(): BinaryOperation {
+        return new Multiply(this.leftNode, this.rightNode);
     }
 }

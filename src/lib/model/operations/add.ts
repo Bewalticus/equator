@@ -12,31 +12,29 @@ export default class Add extends BinaryOperation {
         super(leftNode, "+", rightNode);
     }
 
-    simplify(): Node {
-        var leftSimplified = this.leftNode.simplify();
-        var rightSimplified = this.rightNode.simplify();
+    simplify(): [boolean, Node] {
+        var [leftChanged, leftSimplified] = this.leftNode.simplify();
+        var [rightChanged, rightSimplified] = this.rightNode.simplify();
         var simplified;
-        if (leftSimplified instanceof Constant && rightSimplified instanceof Constant) {
-            simplified = new Constant(leftSimplified.value + rightSimplified.value);
-        }
-        if (!simplified) {
-            // try to simplify addition across sub-terms
-            simplified = this.simplifyAcrossSubTerms(leftSimplified, rightSimplified);
-        }
-        if (!simplified) {
+        // try to simplify addition across sub-terms
+        simplified = this.simplifyAcrossSubTerms(leftSimplified, rightSimplified);
+        var changed = leftChanged || rightChanged || (simplified != undefined);
+        if (!changed) {
             // no simplify solution found, just return simplified sub-terms
-            simplified = new Add(leftSimplified, rightSimplified);
+            simplified = this;
         }
         if ((simplified instanceof Add) && (simplified.leftNode.isEquivalentTo(simplified.rightNode))) {
-            simplified = new Multiply(new Constant(2), simplified.leftNode).simplify();
+            [, simplified] = new Multiply(new Constant(2), simplified.leftNode).simplify();
+            changed = true;
         }
-        return simplified; 
+        return [changed, simplified];
     }
 
     simplifyAcrossSubTerms(term1: Node, term2: Node): PossibleNode {
         var [term1Constant, term1Complex] = this.extractConstantFromSubterm(term1);
         var [term2Constant, term2Complex] = this.extractConstantFromSubterm(term2);
         if (!term1Constant && !term2Constant) return undefined;
+        var constantsSimplified = term1Constant && term2Constant;
         var sum = 0;
         var complex: Node[] = [];
         var rightSubterm: Node = undefined;
@@ -46,14 +44,19 @@ export default class Add extends BinaryOperation {
         if (term2Complex) complex.push(term2Complex);
         if (complex.length == 2) {
             if (complex[0].isEquivalentTo(complex[1])) {
-                rightSubterm = new Multiply(new Constant(2), complex[0]).simplify();
+                [, rightSubterm] = new Multiply(new Constant(2), complex[0]).simplify();
             } else {
                 rightSubterm = new Add(complex[0], complex[1]);
             }
-        } else {
+        } else if (complex.length == 1) {
+            if (!constantsSimplified) return undefined;
             rightSubterm = complex[0];
         }
-        return new Add(new Constant(sum), rightSubterm);
+        if (rightSubterm) {
+            return new Add(new Constant(sum), rightSubterm);
+        } else {
+            return new Constant(sum);
+        }
     }
 
     extractConstantFromSubterm(term: Node): [Constant | undefined, PossibleNode] {
@@ -63,5 +66,9 @@ export default class Add extends BinaryOperation {
         if (term.leftNode instanceof Constant) return [term.leftNode, term.rightNode];
         if (term.rightNode instanceof Constant) return [term.rightNode, term.leftNode];
         return [undefined, term];
+    }
+
+    clone(): BinaryOperation {
+        return new Add(this.leftNode, this.rightNode);
     }
 }
